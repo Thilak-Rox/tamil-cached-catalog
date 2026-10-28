@@ -1,8 +1,8 @@
 {
-  "id": "org.community.dads.tamil.cached",
-  "version": "1.0.0",
-  "name": "Dad's Tamil Dubbed (TorBox Cached)",
-  "description": "Verified cached Tamil-dubbed movies with zero nudity.",
+  "id": "org.community.tamil.dubs.cached",
+  "version": "1.3.0",
+  "name": "Tamil Dubs",
+  "description": "Curated Tamil-dubbed releases cached on TorBox.",
   "resources": [
     "catalog"
   ],
@@ -12,8 +12,13 @@
   "catalogs": [
     {
       "type": "movie",
-      "id": "tamil_cached_catalog",
-      "name": "Tamil Dubbed (Instant TorBox)"
+      "id": "tamil_hollywood",
+      "name": "Hollywood (Tamil Dubbed)"
+    },
+    {
+      "type": "movie",
+      "id": "tamil_indian",
+      "name": "Indian Hits (Tamil Dubbed)"
     }
   ],
   "idPrefixes": [
