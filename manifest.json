@@ -1,0 +1,22 @@
+{
+  "id": "org.community.dads.tamil.cached",
+  "version": "1.0.0",
+  "name": "Dad's Tamil Dubbed (TorBox Cached)",
+  "description": "Verified cached Tamil-dubbed movies with zero nudity.",
+  "resources": [
+    "catalog"
+  ],
+  "types": [
+    "movie"
+  ],
+  "catalogs": [
+    {
+      "type": "movie",
+      "id": "tamil_cached_catalog",
+      "name": "Tamil Dubbed (Instant TorBox)"
+    }
+  ],
+  "idPrefixes": [
+    "tt"
+  ]
+}
