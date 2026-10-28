@@ -1,0 +1,39 @@
+name: Update Tamil Cached Catalog
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'  # Runs automatically every 12 hours
+  workflow_dispatch:        # Allows manual 1-click update
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run Pipeline (MDBList -> Tamil Scrape -> TorBox Cache)
+        env:
+          MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
+          MDBLIST_LIST_PATH: ${{ secrets.MDBLIST_LIST_PATH }}
+          TORBOX_API_KEY: ${{ secrets.TORBOX_API_KEY }}
+        run: python sync.py
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
