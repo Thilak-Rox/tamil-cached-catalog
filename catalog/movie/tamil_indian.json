@@ -64,17 +64,17 @@
       "description": ""
     },
     {
-      "id": "tt27922706",
-      "type": "movie",
-      "name": "Chhaava",
-      "poster": "https://images.metahub.space/poster/medium/tt27922706/img",
-      "description": ""
-    },
-    {
       "id": "tt33318732",
       "type": "movie",
       "name": "Jailer 2",
       "poster": "https://images.metahub.space/poster/medium/tt33318732/img",
+      "description": ""
+    },
+    {
+      "id": "tt27922706",
+      "type": "movie",
+      "name": "Chhaava",
+      "poster": "https://images.metahub.space/poster/medium/tt27922706/img",
       "description": ""
     },
     {
