@@ -204,13 +204,6 @@
       "description": ""
     },
     {
-      "id": "tt35538033",
-      "type": "movie",
-      "name": "Resident Evil",
-      "poster": "https://images.metahub.space/poster/medium/tt35538033/img",
-      "description": ""
-    },
-    {
       "id": "tt0383574",
       "type": "movie",
       "name": "Pirates of the Caribbean: Dead Man's Chest",
@@ -229,6 +222,13 @@
       "type": "movie",
       "name": "Spider-Man: Homecoming",
       "poster": "https://images.metahub.space/poster/medium/tt2250912/img",
+      "description": ""
+    },
+    {
+      "id": "tt35538033",
+      "type": "movie",
+      "name": "Resident Evil",
+      "poster": "https://images.metahub.space/poster/medium/tt35538033/img",
       "description": ""
     },
     {
@@ -502,13 +502,6 @@
       "type": "movie",
       "name": "Death Race",
       "poster": "https://images.metahub.space/poster/medium/tt0452608/img",
-      "description": ""
-    },
-    {
-      "id": "tt0209163",
-      "type": "movie",
-      "name": "The Mummy Returns",
-      "poster": "https://images.metahub.space/poster/medium/tt0209163/img",
       "description": ""
     },
     {
