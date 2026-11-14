@@ -8,24 +8,28 @@ import requests
 MDBLIST_API_KEY = os.environ.get("MDBLIST_API_KEY", "").strip()
 TORBOX_API_KEY = os.environ.get("TORBOX_API_KEY", "").strip()
 
-# Catalog definitions (Separate clean rows)
+# Catalog definitions
 CATALOG_CONFIGS = [
     {
         "id": "tamil_hollywood",
         "name": "Hollywood (Tamil Dubbed)",
-        "path": os.environ.get("MDBLIST_HOLLYWOOD_PATH", "2fineadventure/english-hits-tamil-dubbed").strip()
+        "path": os.environ.get("MDBLIST_HOLLYWOOD_PATH", "2fineadventure/english-hits-tamil-dubbed").strip(),
+        "is_indian": False
     },
     {
         "id": "tamil_indian",
         "name": "Indian Hits (Tamil Dubbed)",
-        "path": os.environ.get("MDBLIST_INDIAN_PATH", "2fineadventure/indian-hits-tamil-dubbed").strip()
+        "path": os.environ.get("MDBLIST_INDIAN_PATH", "2fineadventure/indian-hits-tamil-dubbed").strip(),
+        "is_indian": True
     }
 ]
 
-TAMIL_REGEX = re.compile(r"(?i)(?:\b(tam|tamil|1tamilmv|tamilblasters|tamilyogi)\b|\[.*?(tam|tamil).*?\])")
+# Expanded regex: Matches "tam", "tamil", release groups, bracketed variants like [Tam + Tel], and multi-audio tags
+TAMIL_REGEX = re.compile(
+    r"(?i)(?:\b(tam|tamil|1tamilmv|tamilblasters|tamilyogi)\b|\[[^\]]*(?:tam|tamil)[^\]]*\]|\bmulti(?:-|\s)?(?:audio|dub)\b|\bdual(?:-|\s)?audio\b)"
+)
 INFOHASH_REGEX = re.compile(r"\b([a-fA-F0-9]{40})\b")
 
-# Updated to use Midnight's MediaFusion instance instead of ElfHosted
 SCRAPER_URLS = [
     "https://mediafusionfortheweebs.midnightignite.me/stream/movie/{imdb_id}.json",
     "https://torrentio.strem.fun/stream/movie/{imdb_id}.json"
@@ -34,7 +38,6 @@ SCRAPER_URLS = [
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 def fetch_all_mdblist_items(slug_or_path):
-    """Paginates through MDBList API to ensure all 700+ movies are fetched, not just the first page."""
     p = slug_or_path.replace("https://mdblist.com/lists/", "").strip("/")
     if not p:
         return []
@@ -44,7 +47,7 @@ def fetch_all_mdblist_items(slug_or_path):
     offset = 0
     limit = 100
     
-    print(f"Fetching clean candidates from MDBList: {p}...")
+    print(f"Fetching candidates from MDBList: {p}...")
     while True:
         url = f"https://api.mdblist.com/lists/{p}/items?apikey={MDBLIST_API_KEY}&limit={limit}&offset={offset}"
         try:
@@ -85,8 +88,8 @@ def fetch_all_mdblist_items(slug_or_path):
     print(f"Loaded total {len(candidates)} candidates from {p}")
     return candidates
 
-def find_tamil_hashes(imdb_id):
-    """Queries scrapers with 429 rate-limit backoff handling."""
+def find_movie_hashes(imdb_id, is_indian=False):
+    """Scrapes streams. For Hollywood, requires Tamil audio tags. For Indian titles, accepts native releases."""
     hashes = set()
     for template in SCRAPER_URLS:
         url = template.format(imdb_id=imdb_id)
@@ -102,7 +105,10 @@ def find_tamil_hashes(imdb_id):
                 streams = resp.json().get("streams", [])
                 for s in streams:
                     text_blob = f"{s.get('name', '')} {s.get('title', '')} {s.get('description', '')} {s.get('behaviorHints', {}).get('filename', '')}"
-                    if TAMIL_REGEX.search(text_blob):
+                    
+                    # For Hollywood: Must have Tamil/Multi audio.
+                    # For Indian catalog: Already regional, so accept any stream or regional tag.
+                    if is_indian or TAMIL_REGEX.search(text_blob):
                         ih = s.get("infoHash")
                         if not ih and s.get("url"):
                             m = INFOHASH_REGEX.search(s.get("url", ""))
@@ -117,7 +123,7 @@ def find_tamil_hashes(imdb_id):
 
 def check_torbox_cached(all_hashes):
     cached_set = set()
-    if not all_hashes:
+    if not all_hashes or not TORBOX_API_KEY:
         return cached_set
         
     batch_size = 50
@@ -147,45 +153,47 @@ def check_torbox_cached(all_hashes):
     return cached_set
 
 def main():
-    # 1. Fetch all candidates per catalog using pagination
     catalogs_data = []
-    unique_imdb_ids = {}
+    unique_candidates = {}  # imdb_id -> (title, is_indian)
 
     for cat in CATALOG_CONFIGS:
         items = fetch_all_mdblist_items(cat["path"])
         catalogs_data.append({
             "id": cat["id"],
             "name": cat["name"],
+            "is_indian": cat["is_indian"],
             "items": items
         })
         for it in items:
-            unique_imdb_ids[it["id"]] = it["name"]
+            # If an item appears in both, give precedence to Hollywood rules if applicable
+            if it["id"] not in unique_candidates:
+                unique_candidates[it["id"]] = (it["name"], cat["is_indian"])
 
-    print(f"\nTotal unique IMDb candidates to verify across both rows: {len(unique_imdb_ids)}")
+    print(f"\nTotal unique IMDb candidates to verify: {len(unique_candidates)}")
 
-    # 2. Scrape Tamil hashes
     movie_hash_map = {}
     all_hashes = set()
-    for idx, (imdb_id, title) in enumerate(unique_imdb_ids.items(), 1):
-        hashes = find_tamil_hashes(imdb_id)
+    
+    for idx, (imdb_id, (title, is_indian)) in enumerate(unique_candidates.items(), 1):
+        hashes = find_movie_hashes(imdb_id, is_indian=is_indian)
         if hashes:
             movie_hash_map[imdb_id] = hashes
             all_hashes.update(hashes)
-            print(f"[{idx}/{len(unique_imdb_ids)}] Found {len(hashes)} Tamil release(s) for {title} ({imdb_id})")
+            print(f"[{idx}/{len(unique_candidates)}] Found {len(hashes)} candidate stream(s) for {title} ({imdb_id})")
+        else:
+            print(f"[{idx}/{len(unique_candidates)}] No eligible streams found for {title} ({imdb_id})")
         time.sleep(0.3)
 
-    # 3. Check TorBox cache in batches
     print(f"\nChecking {len(all_hashes)} candidate hashes with TorBox API...")
     cached_hashes = check_torbox_cached(list(all_hashes))
-    print(f"TorBox verified {len(cached_hashes)} cached Tamil releases.")
+    print(f"TorBox verified {len(cached_hashes)} cached releases.")
 
-    # 4. Generate manifest with 2 separate clean rows
     os.makedirs("public/catalog/movie", exist_ok=True)
     manifest = {
         "id": "org.community.tamil.dubs.cached",
-        "version": "1.3.0",
+        "version": "1.3.1",
         "name": "Tamil Dubs",
-        "description": "Curated Tamil-dubbed releases cached on TorBox.",
+        "description": "Curated Tamil releases verified cached on TorBox.",
         "resources": ["catalog"],
         "types": ["movie"],
         "catalogs": [
@@ -202,7 +210,6 @@ def main():
     with open("public/manifest.json", "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
-    # 5. Build JSON file for each row, preserving exact MDBList sort order
     for cat in catalogs_data:
         cat_id = cat["id"]
         cat_name = cat["name"]
@@ -211,6 +218,8 @@ def main():
         for item in cat["items"]:
             imdb_id = item["id"]
             hashes = movie_hash_map.get(imdb_id, [])
+            
+            # STRICT FILTER: Item is ONLY included if at least one hash is confirmed cached in TorBox
             if any(h in cached_hashes for h in hashes):
                 verified_metas.append({
                     "id": imdb_id,
@@ -224,7 +233,7 @@ def main():
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump({"metas": verified_metas}, f, indent=2)
 
-        print(f"Catalog '{cat_name}' ({cat_id}): {len(verified_metas)} verified cached movies saved.")
+        print(f"Catalog '{cat_name}' ({cat_id}): {len(verified_metas)} cached movies saved.")
 
 if __name__ == "__main__":
     main()
