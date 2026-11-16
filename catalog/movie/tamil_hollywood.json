@@ -736,6 +736,13 @@
       "description": ""
     },
     {
+      "id": "tt0420223",
+      "type": "movie",
+      "name": "Stranger Than Fiction",
+      "poster": "https://images.metahub.space/poster/medium/tt0420223/img",
+      "description": ""
+    },
+    {
       "id": "tt0311113",
       "type": "movie",
       "name": "Master and Commander: The Far Side of the World",
@@ -1002,6 +1009,13 @@
       "description": ""
     },
     {
+      "id": "tt0146309",
+      "type": "movie",
+      "name": "Thirteen Days",
+      "poster": "https://images.metahub.space/poster/medium/tt0146309/img",
+      "description": ""
+    },
+    {
       "id": "tt1825683",
       "type": "movie",
       "name": "Black Panther",
@@ -1240,6 +1254,13 @@
       "description": ""
     },
     {
+      "id": "tt0293508",
+      "type": "movie",
+      "name": "The Phantom of the Opera",
+      "poster": "https://images.metahub.space/poster/medium/tt0293508/img",
+      "description": ""
+    },
+    {
       "id": "tt0117060",
       "type": "movie",
       "name": "Mission: Impossible",
@@ -1335,6 +1356,13 @@
       "type": "movie",
       "name": "John Q",
       "poster": "https://images.metahub.space/poster/medium/tt0251160/img",
+      "description": ""
+    },
+    {
+      "id": "tt0473705",
+      "type": "movie",
+      "name": "State of Play",
+      "poster": "https://images.metahub.space/poster/medium/tt0473705/img",
       "description": ""
     },
     {
