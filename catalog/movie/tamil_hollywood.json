@@ -442,13 +442,6 @@
       "description": ""
     },
     {
-      "id": "tt12262116",
-      "type": "movie",
-      "name": "Thirteen Lives",
-      "poster": "https://images.metahub.space/poster/medium/tt12262116/img",
-      "description": ""
-    },
-    {
       "id": "tt2488496",
       "type": "movie",
       "name": "Star Wars: The Force Awakens",
@@ -1580,6 +1573,13 @@
       "type": "movie",
       "name": "The Edge",
       "poster": "https://images.metahub.space/poster/medium/tt0119051/img",
+      "description": ""
+    },
+    {
+      "id": "tt0118771",
+      "type": "movie",
+      "name": "Breakdown",
+      "poster": "https://images.metahub.space/poster/medium/tt0118771/img",
       "description": ""
     },
     {
@@ -4926,6 +4926,13 @@
       "type": "movie",
       "name": "Pompeii",
       "poster": "https://images.metahub.space/poster/medium/tt1921064/img",
+      "description": ""
+    },
+    {
+      "id": "tt0267913",
+      "type": "movie",
+      "name": "Scooby-Doo",
+      "poster": "https://images.metahub.space/poster/medium/tt0267913/img",
       "description": ""
     },
     {
