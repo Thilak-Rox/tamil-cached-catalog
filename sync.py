@@ -8,6 +8,9 @@ import requests
 MDBLIST_API_KEY = os.environ.get("MDBLIST_API_KEY", "").strip()
 TORBOX_API_KEY = os.environ.get("TORBOX_API_KEY", "").strip()
 
+# Minimum size constraint for Hollywood catalog
+HOLLYWOOD_MIN_SIZE_GB = 15.0
+
 # Catalog definitions
 CATALOG_CONFIGS = [
     {
@@ -24,10 +27,19 @@ CATALOG_CONFIGS = [
     }
 ]
 
-# Expanded regex: Matches "tam", "tamil", release groups, bracketed variants like [Tam + Tel], and multi-audio tags
+# Audio matching: Tamil audio, regional trackers, bracketed tags [Tam+Tel] or (Tamil+Hindi), and Multi/Dual audio
 TAMIL_REGEX = re.compile(
-    r"(?i)(?:\b(tam|tamil|1tamilmv|tamilblasters|tamilyogi)\b|\[[^\]]*(?:tam|tamil)[^\]]*\]|\bmulti(?:-|\s)?(?:audio|dub)\b|\bdual(?:-|\s)?audio\b)"
+    r"(?i)("
+    r"\b(tam|tamil|1tamilmv|tamilblasters|tamilyogi)\b|"
+    r"\[[^\]]*(?:tam|tamil|multi)[^\]]*\]|"
+    r"\([^)]*(?:tam|tamil|multi)[^)]*\)|"
+    r"\b(?:multi|dual)[\s\.\-_]?(?:audio|dub)\b"
+    r")"
 )
+
+# Resolution filters
+HOLLYWOOD_RES_REGEX = re.compile(r"(?i)\b(1080p|1080i|2160p|4k|uhd|fhd)\b")
+DISALLOWED_RES_REGEX = re.compile(r"(?i)\b(720p|480p|576p|360p|cam|hdcam|telesync|hdts|predvd|dvdrip)\b")
 INFOHASH_REGEX = re.compile(r"\b([a-fA-F0-9]{40})\b")
 
 SCRAPER_URLS = [
@@ -88,9 +100,55 @@ def fetch_all_mdblist_items(slug_or_path):
     print(f"Loaded total {len(candidates)} candidates from {p}")
     return candidates
 
-def find_movie_hashes(imdb_id, is_indian=False):
-    """Scrapes streams. For Hollywood, requires Tamil audio tags. For Indian titles, accepts native releases."""
-    hashes = set()
+def extract_stream_size_gb(stream):
+    """Extracts stream file size in GB from stream object or text metadata."""
+    # 1. Check Stremio behaviorHints.videoSize (bytes)
+    video_size = stream.get("behaviorHints", {}).get("videoSize")
+    if isinstance(video_size, (int, float)) and video_size > 0:
+        return video_size / (1024 ** 3)
+
+    text_blob = f"{stream.get('title', '')} {stream.get('description', '')} {stream.get('name', '')}"
+
+    # 2. Match floppy disk emoji format: 💾 72.4 GB or 💾 15.6 GiB
+    emoji_match = re.search(r"💾\s*([0-9]+(?:\.[0-9]+)?)\s*(TB|TiB|GB|GiB|MB|MiB)", text_blob, re.IGNORECASE)
+    if emoji_match:
+        val = float(emoji_match.group(1))
+        unit = emoji_match.group(2).upper()
+        if "TB" in unit:
+            return val * 1024.0
+        if "GB" in unit:
+            return val
+        if "MB" in unit:
+            return val / 1024.0
+
+    # 3. Match generic patterns: e.g. '72.4 GB', '15.5GiB'
+    matches = re.findall(r"\b([0-9]+(?:\.[0-9]+)?)\s*(TB|TiB|GB|GiB|MB|MiB)\b", text_blob, re.IGNORECASE)
+    for val_str, unit_str in matches:
+        try:
+            val = float(val_str)
+            unit = unit_str.upper()
+            if "TB" in unit:
+                return val * 1024.0
+            if "GB" in unit:
+                return val
+            if "MB" in unit:
+                return val / 1024.0
+        except ValueError:
+            continue
+
+    return None
+
+def get_stream_infohash(stream):
+    ih = stream.get("infoHash")
+    if not ih and stream.get("url"):
+        m = INFOHASH_REGEX.search(stream.get("url", ""))
+        if m:
+            ih = m.group(1)
+    return ih.lower() if ih else None
+
+def find_movie_streams(imdb_id):
+    """Scrapes raw stream objects from both MediaFusion and Torrentio."""
+    streams = []
     for template in SCRAPER_URLS:
         url = template.format(imdb_id=imdb_id)
         for attempt in range(2):
@@ -102,59 +160,112 @@ def find_movie_hashes(imdb_id, is_indian=False):
                 if resp.status_code != 200:
                     break
                     
-                streams = resp.json().get("streams", [])
-                for s in streams:
-                    text_blob = f"{s.get('name', '')} {s.get('title', '')} {s.get('description', '')} {s.get('behaviorHints', {}).get('filename', '')}"
-                    
-                    # For Hollywood: Must have Tamil/Multi audio.
-                    # For Indian catalog: Already regional, so accept any stream or regional tag.
-                    if is_indian or TAMIL_REGEX.search(text_blob):
-                        ih = s.get("infoHash")
-                        if not ih and s.get("url"):
-                            m = INFOHASH_REGEX.search(s.get("url", ""))
-                            if m:
-                                ih = m.group(1)
-                        if ih:
-                            hashes.add(ih.lower())
+                data = resp.json().get("streams", [])
+                streams.extend(data)
                 break
             except Exception:
                 break
-    return list(hashes)
+    return streams
 
-def check_torbox_cached(all_hashes):
-    cached_set = set()
+def check_torbox_cached_details(all_hashes):
+    """Checks cache status and file size metadata using TorBox format=object."""
+    cached_info = {}
     if not all_hashes or not TORBOX_API_KEY:
-        return cached_set
+        return cached_info
         
     batch_size = 50
     headers = {"Authorization": f"Bearer {TORBOX_API_KEY}"}
     for i in range(0, len(all_hashes), batch_size):
         batch = all_hashes[i:i + batch_size]
         hash_csv = ",".join(batch)
-        url = f"https://api.torbox.app/v1/api/torrents/checkcached?hash={hash_csv}&format=list"
+        url = f"https://api.torbox.app/v1/api/torrents/checkcached?hash={hash_csv}&format=object"
         try:
             resp = requests.get(url, headers=headers, timeout=15)
             if resp.status_code == 200:
                 payload = resp.json()
-                data = payload.get("data", [])
-                if isinstance(data, list):
+                data = payload.get("data", {})
+                if isinstance(data, dict):
+                    for h, item in data.items():
+                        if item:
+                            h_lower = h.lower()
+                            size_bytes = item.get("size") if isinstance(item, dict) else None
+                            size_gb = (size_bytes / (1024 ** 3)) if isinstance(size_bytes, (int, float)) else None
+                            cached_info[h_lower] = {
+                                "cached": True,
+                                "size_gb": size_gb
+                            }
+                elif isinstance(data, list):
                     for item in data:
                         if isinstance(item, dict) and item.get("hash"):
-                            cached_set.add(item["hash"].lower())
+                            h_lower = item["hash"].lower()
+                            size_bytes = item.get("size")
+                            size_gb = (size_bytes / (1024 ** 3)) if isinstance(size_bytes, (int, float)) else None
+                            cached_info[h_lower] = {
+                                "cached": True,
+                                "size_gb": size_gb
+                            }
                         elif isinstance(item, str):
-                            cached_set.add(item.lower())
-                elif isinstance(data, dict):
-                    for h, val in data.items():
-                        if val:
-                            cached_set.add(h.lower())
+                            cached_info[item.lower()] = {
+                                "cached": True,
+                                "size_gb": None
+                            }
         except Exception as e:
             print(f"TorBox API check failed: {e}")
         time.sleep(0.4)
-    return cached_set
+    return cached_info
+
+def is_valid_hollywood_stream(stream, cached_info):
+    """Strict filter: Tamil audio + 1080p/4K only (no 720p/CAM) + min 15GB + TorBox cached."""
+    ih = get_stream_infohash(stream)
+    if not ih or ih not in cached_info:
+        return False
+
+    text_blob = f"{stream.get('name', '')} {stream.get('title', '')} {stream.get('description', '')} {stream.get('behaviorHints', {}).get('filename', '')}"
+
+    # 1. Must match Tamil / Multi audio
+    if not TAMIL_REGEX.search(text_blob):
+        return False
+
+    # 2. Reject 720p, 480p, and cam/theatrical rips
+    if DISALLOWED_RES_REGEX.search(text_blob):
+        return False
+
+    # 3. Must be at least 1080p or 4K/UHD
+    if not HOLLYWOOD_RES_REGEX.search(text_blob):
+        return False
+
+    # 4. Enforce minimum 15 GB size
+    size_gb = extract_stream_size_gb(stream)
+    if size_gb is None:
+        size_gb = cached_info[ih].get("size_gb")
+
+    if size_gb is not None:
+        if size_gb < HOLLYWOOD_MIN_SIZE_GB:
+            return False
+    else:
+        # Fallback if size is entirely missing from metadata: require Remux/BluRay tag
+        if not re.search(r"(?i)\b(remux|bdremux|uhd|bluray)\b", text_blob):
+            return False
+
+    return True
+
+def is_valid_indian_stream(stream, cached_info):
+    """Indian filter: Native/regional release + TorBox cached + excludes CAM/Telesync rips."""
+    ih = get_stream_infohash(stream)
+    if not ih or ih not in cached_info:
+        return False
+
+    text_blob = f"{stream.get('name', '')} {stream.get('title', '')} {stream.get('description', '')} {stream.get('behaviorHints', {}).get('filename', '')}"
+
+    # Exclude CAM/Telesync theater recordings
+    if re.search(r"(?i)\b(cam|hdcam|telesync|hdts|predvd)\b", text_blob):
+        return False
+
+    return True
 
 def main():
     catalogs_data = []
-    unique_candidates = {}  # imdb_id -> (title, is_indian)
+    unique_candidates = {}
 
     for cat in CATALOG_CONFIGS:
         items = fetch_all_mdblist_items(cat["path"])
@@ -165,33 +276,34 @@ def main():
             "items": items
         })
         for it in items:
-            # If an item appears in both, give precedence to Hollywood rules if applicable
-            if it["id"] not in unique_candidates:
-                unique_candidates[it["id"]] = (it["name"], cat["is_indian"])
+            unique_candidates[it["id"]] = it["name"]
 
-    print(f"\nTotal unique IMDb candidates to verify: {len(unique_candidates)}")
+    print(f"\nTotal unique IMDb candidates to query: {len(unique_candidates)}")
 
-    movie_hash_map = {}
+    movie_streams_map = {}
     all_hashes = set()
     
-    for idx, (imdb_id, (title, is_indian)) in enumerate(unique_candidates.items(), 1):
-        hashes = find_movie_hashes(imdb_id, is_indian=is_indian)
-        if hashes:
-            movie_hash_map[imdb_id] = hashes
-            all_hashes.update(hashes)
-            print(f"[{idx}/{len(unique_candidates)}] Found {len(hashes)} candidate stream(s) for {title} ({imdb_id})")
+    for idx, (imdb_id, title) in enumerate(unique_candidates.items(), 1):
+        streams = find_movie_streams(imdb_id)
+        if streams:
+            movie_streams_map[imdb_id] = streams
+            for s in streams:
+                ih = get_stream_infohash(s)
+                if ih:
+                    all_hashes.add(ih)
+            print(f"[{idx}/{len(unique_candidates)}] Found {len(streams)} stream(s) for {title} ({imdb_id})")
         else:
-            print(f"[{idx}/{len(unique_candidates)}] No eligible streams found for {title} ({imdb_id})")
+            print(f"[{idx}/{len(unique_candidates)}] No streams found for {title} ({imdb_id})")
         time.sleep(0.3)
 
-    print(f"\nChecking {len(all_hashes)} candidate hashes with TorBox API...")
-    cached_hashes = check_torbox_cached(list(all_hashes))
-    print(f"TorBox verified {len(cached_hashes)} cached releases.")
+    print(f"\nChecking cache and size for {len(all_hashes)} candidate hashes via TorBox API...")
+    cached_info = check_torbox_cached_details(list(all_hashes))
+    print(f"TorBox verified {len(cached_info)} cached release(s).")
 
     os.makedirs("public/catalog/movie", exist_ok=True)
     manifest = {
         "id": "org.community.tamil.dubs.cached",
-        "version": "1.3.1",
+        "version": "1.4.0",
         "name": "Tamil Dubs",
         "description": "Curated Tamil releases verified cached on TorBox.",
         "resources": ["catalog"],
@@ -213,14 +325,19 @@ def main():
     for cat in catalogs_data:
         cat_id = cat["id"]
         cat_name = cat["name"]
+        is_indian = cat["is_indian"]
         verified_metas = []
 
         for item in cat["items"]:
             imdb_id = item["id"]
-            hashes = movie_hash_map.get(imdb_id, [])
+            streams = movie_streams_map.get(imdb_id, [])
             
-            # STRICT FILTER: Item is ONLY included if at least one hash is confirmed cached in TorBox
-            if any(h in cached_hashes for h in hashes):
+            if is_indian:
+                has_valid = any(is_valid_indian_stream(s, cached_info) for s in streams)
+            else:
+                has_valid = any(is_valid_hollywood_stream(s, cached_info) for s in streams)
+
+            if has_valid:
                 verified_metas.append({
                     "id": imdb_id,
                     "type": "movie",
@@ -233,7 +350,7 @@ def main():
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump({"metas": verified_metas}, f, indent=2)
 
-        print(f"Catalog '{cat_name}' ({cat_id}): {len(verified_metas)} cached movies saved.")
+        print(f"Catalog '{cat_name}' ({cat_id}): {len(verified_metas)} verified movies saved.")
 
 if __name__ == "__main__":
     main()
