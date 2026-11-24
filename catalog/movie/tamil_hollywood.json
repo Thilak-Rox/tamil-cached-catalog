@@ -1884,6 +1884,13 @@
       "description": ""
     },
     {
+      "id": "tt0164184",
+      "type": "movie",
+      "name": "The Sum of All Fears",
+      "poster": "https://images.metahub.space/poster/medium/tt0164184/img",
+      "description": ""
+    },
+    {
       "id": "tt0116253",
       "type": "movie",
       "name": "Executive Decision",
@@ -2819,6 +2826,13 @@
       "type": "movie",
       "name": "Batman Forever",
       "poster": "https://images.metahub.space/poster/medium/tt0112462/img",
+      "description": ""
+    },
+    {
+      "id": "tt0267913",
+      "type": "movie",
+      "name": "Scooby-Doo",
+      "poster": "https://images.metahub.space/poster/medium/tt0267913/img",
       "description": ""
     },
     {
