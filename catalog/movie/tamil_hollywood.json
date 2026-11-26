@@ -43,6 +43,13 @@
       "description": ""
     },
     {
+      "id": "tt6019206",
+      "type": "movie",
+      "name": "Kill Bill: The Whole Bloody Affair",
+      "poster": "https://images.metahub.space/poster/medium/tt6019206/img",
+      "description": ""
+    },
+    {
       "id": "tt0133093",
       "type": "movie",
       "name": "The Matrix",
@@ -2581,6 +2588,13 @@
       "type": "movie",
       "name": "Blue Beetle",
       "poster": "https://images.metahub.space/poster/medium/tt9362930/img",
+      "description": ""
+    },
+    {
+      "id": "tt3427252",
+      "type": "movie",
+      "name": "The Boogeyman",
+      "poster": "https://images.metahub.space/poster/medium/tt3427252/img",
       "description": ""
     },
     {
