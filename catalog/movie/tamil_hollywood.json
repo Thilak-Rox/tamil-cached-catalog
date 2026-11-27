@@ -1443,6 +1443,13 @@
       "description": ""
     },
     {
+      "id": "tt0117438",
+      "type": "movie",
+      "name": "Ransom",
+      "poster": "https://images.metahub.space/poster/medium/tt0117438/img",
+      "description": ""
+    },
+    {
       "id": "tt8688634",
       "type": "movie",
       "name": "21 Bridges",
@@ -2847,6 +2854,13 @@
       "type": "movie",
       "name": "Scooby-Doo",
       "poster": "https://images.metahub.space/poster/medium/tt0267913/img",
+      "description": ""
+    },
+    {
+      "id": "tt0277296",
+      "type": "movie",
+      "name": "The Scorpion King",
+      "poster": "https://images.metahub.space/poster/medium/tt0277296/img",
       "description": ""
     },
     {
